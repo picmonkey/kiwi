@@ -715,15 +715,20 @@ var kiwi = exports || kiwi || {}, exports;
       default: {
         var type = definitions[field.type];
         if (!type) {
-          console.log('Type:', type);
-          console.log(definitions);
           error(
             'Invalid type ' + quote(field.type) + ' for field ' + quote(field.name),
             field.line,
             field.column
           );
         } else if (type.kind === 'ENUM') {
-          code = 'this[' + quote(type.name) + '][bb.readVarUint()]';
+          var lines = [
+            '(function (t) {',
+            '  var byte = bb.readVarUint();',
+            '  if (undefined == t[' + quote(type.name) + '][byte]) { throw new Error("Attempted to parse invalid enum"); }',
+            '  return t[' + quote(type.name) + '][byte]',
+            '})(this)',
+          ]
+          code = lines.join('\n');
         } else {
           code = 'this[' + quote('decode' + type.name) + '](bb)';
         }
@@ -764,7 +769,7 @@ var kiwi = exports || kiwi || {}, exports;
       if (field.isArray) {
         if (field.isDeprecated) {
           lines.push(indent + 'var length = bb.readVarUint();');
-          lines.push(indent + 'while (length-- > 0) ' + code + ';');        
+          lines.push(indent + 'while (length-- > 0) { ' + code + ' };');
         } else {
           if (field.type == "float32"){
             lines.push(indent + 'var length = bb.readVarUint();');
@@ -774,7 +779,7 @@ var kiwi = exports || kiwi || {}, exports;
           } else {
             lines.push(indent + 'var values = result[' + quote(field.name) + '] = [];');
             lines.push(indent + 'var length = bb.readVarUint();');
-            lines.push(indent + 'while (length-- > 0) values.push(' + code + ');');  
+            lines.push(indent + 'while (length-- > 0) { values.push(' + code + '); }');
           }
         }
       } else if (field.isMap) {
@@ -784,7 +789,7 @@ var kiwi = exports || kiwi || {}, exports;
         } else {
           lines.push(indent + 'var map = result[' + quote(field.name) + '] = {};');
           lines.push(indent + 'var length = bb.readVarUint();');
-          lines.push(indent + 'while (length-- > 0) map[' + code[0] + '] = ' + code[1] + ';');
+          lines.push(indent + 'while (length-- > 0) { map[' + code[0] + '] = ' + code[1] + '; }');
         }
       } else {
         if (field.isDeprecated) {
