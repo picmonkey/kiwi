@@ -6,6 +6,8 @@
 #include <memory.h>
 #include <stdlib.h>
 #include <string.h>
+#include <functional>
+#include <unordered_map>
 
 namespace kiwi {
   class String;
@@ -31,12 +33,18 @@ namespace kiwi {
     bool readVarInt(int32_t &result);
     bool readString(const char *&result);
     bool readString(String &result, MemoryPool &pool);
+    template <typename TKey, typename TValue>
+    bool readMap(std::unordered_map<TKey, TValue> &result, std::function<bool(TValue &)> valueReader);
+    template <typename TKey>
+    bool readKey(TKey &);
 
     void writeByte(uint8_t value);
     void writeVarFloat(float value);
     void writeVarUint(uint32_t value);
     void writeVarInt(int32_t value);
     void writeString(const char *value);
+    template <typename TKey, typename TValue>
+    void writeMap(const std::unordered_map<TKey, TValue> &value);
 
   private:
     void _growBy(size_t amount);
@@ -142,6 +150,7 @@ namespace kiwi {
       TYPE_UINT = -4,
       TYPE_FLOAT = -5,
       TYPE_STRING = -6,
+      TYPE_MAP = -7,
     };
 
     struct Field {
@@ -168,6 +177,17 @@ namespace kiwi {
     MemoryPool _pool;
     Array<Definition> _definitions;
   };
+}
+
+namespace std {
+  template <>
+    struct hash<kiwi::String> {
+      typedef kiwi::String argument_type;
+      typedef std::size_t result_type;
+      result_type operator()(argument_type const &value) const noexcept {
+        return std::hash<const char *>{}(value.c_str());
+      }
+    };
 }
 
 #endif
@@ -290,6 +310,36 @@ namespace kiwi {
     return true;
   }
 
+  template<>
+  bool kiwi::ByteBuffer::readKey(kiwi::String &key) {
+    const char *k = nullptr;
+    auto ok = readString(k);
+    key = kiwi::String(k);
+    return ok;
+  }
+
+  template <typename TKey, typename TValue>
+  bool kiwi::ByteBuffer::readMap(std::unordered_map<TKey, TValue> &result, std::function<bool(TValue &)> reader) {
+    result = std::unordered_map<TKey, TValue>();
+
+    if (_index >= _size) {
+      return false;
+    }
+
+    uint32_t count = 0;
+    if (!readVarUint(count)) return false;
+
+    while (count --> 0) {
+      TKey key = {};
+      if (!readKey(key)) return false;
+      TValue value = {};
+      if (!reader(value)) return false;
+      result[key] = std::move(value);
+    }
+
+    return true;
+  }
+
   void kiwi::ByteBuffer::writeByte(uint8_t value) {
     assert(!_isConst);
     size_t index = _size;
@@ -342,6 +392,12 @@ namespace kiwi {
     size_t index = _size;
     _growBy(count);
     memcpy(_data + index, value, count);
+  }
+
+  template <typename TKey, typename TValue>
+  void kiwi::ByteBuffer::writeMap(const std::unordered_map<TKey, TValue> &value) {
+    // TODO(tbv) Implement when write support is needed
+    assert(false);
   }
 
   void kiwi::ByteBuffer::_growBy(size_t amount) {
@@ -508,6 +564,11 @@ namespace kiwi {
             if (!bb.readByte(value)) return false;
           } while (value);
           break;
+        }
+
+        case TYPE_MAP: {
+          // TODO(tbv): Not presently supported
+          return false;
         }
 
         default: {

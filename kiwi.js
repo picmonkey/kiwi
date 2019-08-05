@@ -1052,6 +1052,12 @@ var kiwi = exports || kiwi || {}, exports;
       case 'uint': type = 'uint32_t'; break;
       case 'float':
       case 'float32': type = 'float'; break;
+      case 'map':
+        var keyType = cppType(definitions, {type: field.mapKeyType}, false);
+        var valueType = cppType(definitions, {type: field.mapValueType}, false); // Arrays as values not supported
+        type = `std::unordered_map<${keyType}, ${valueType}>`;
+        break;
+
       case 'string': type = 'kiwi::String'; break;
 
       default: {
@@ -1163,6 +1169,45 @@ var kiwi = exports || kiwi || {}, exports;
         }
 
         cpp.push('#ifdef IMPLEMENT_SCHEMA_H');
+        cpp.push('');
+
+        cpp.push('template <typename TValue>');
+        cpp.push('auto readValue(kiwi::ByteBuffer &_bb, kiwi::MemoryPool &_pool, TValue &value) -> bool {');
+        cpp.push('  return value.decode(_bb, _pool);');
+        cpp.push('}');
+        cpp.push('');
+
+        var primitives = {
+          bool: 'readByte',
+          float: 'readVarFloat',
+          int32_t: 'readVarInt',
+          uint8_t: 'readByte',
+          uint32_t: 'readVarUint',
+        };
+        primitives['const char *'] = 'readString';
+
+        Object.keys(primitives).forEach(function(key) {
+          cpp.push('template <>');
+          cpp.push('auto readValue<' + key + '>(kiwi::ByteBuffer &_bb, kiwi::MemoryPool &_pool, ' + key + ' &value) -> bool {');
+          cpp.push('  (void) _pool;');
+          cpp.push('  return _bb.' + primitives[key] + '(value);');
+          cpp.push('}');
+          cpp.push('');
+        });
+
+        cpp.push('template <>');
+        cpp.push('auto readValue<kiwi::String>(kiwi::ByteBuffer &_bb, kiwi::MemoryPool &_pool, kiwi::String &value) -> bool {');
+        cpp.push('  return _bb.readString(value, _pool);');
+        cpp.push('}');
+        cpp.push('');
+
+        cpp.push('template <typename TKey, typename TValue>');
+        cpp.push('auto createValueReader(kiwi::ByteBuffer &_bb, kiwi::MemoryPool &_pool) -> std::function<bool(TValue &)> {');
+        cpp.push('  return [&](TValue &value) {');
+        cpp.push('    value = {};');
+        cpp.push('    return readValue(_bb, _pool, value);');
+        cpp.push('  };');
+        cpp.push('}');
         cpp.push('');
 
         cpp.push('bool BinarySchema::parse(kiwi::ByteBuffer &bb) {');
@@ -1392,6 +1437,11 @@ var kiwi = exports || kiwi || {}, exports;
                 break;
               }
 
+              case 'map': {
+                code = '_bb.writeMap(' + value + ');';
+                break;
+              }
+
               default: {
                 var type = definitions[field.type];
 
@@ -1498,6 +1548,11 @@ var kiwi = exports || kiwi || {}, exports;
                 break;
               }
 
+              case 'map': {
+                code = '_bb.readMap(' + value + ', valueReader)';
+                break;
+              }
+
               default: {
                 var type = definitions[field.type];
 
@@ -1546,6 +1601,10 @@ var kiwi = exports || kiwi || {}, exports;
               else {
                 if (isPointer) {
                   cpp.push(indent + name + ' = _pool.allocate<' + type + '>();');
+                }
+
+                if (field.type === 'map') {
+                  cpp.push(indent + 'auto valueReader = createValueReader<' + cppType(definitions, {type: field.mapKeyType}, false) + ', ' + cppType(definitions, {type: field.mapValueType}, false) + '>(_bb, _pool);');
                 }
 
                 cpp.push(indent + 'if (!' + code + ') return false;');
