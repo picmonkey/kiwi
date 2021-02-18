@@ -656,7 +656,7 @@ var kiwi = exports || kiwi || {}, exports;
 
 
   function decodeCodeForField(field, definitions) {
-    var code;
+    let code;
 
     switch (field.type) {
       case 'bool': {
@@ -758,9 +758,9 @@ var kiwi = exports || kiwi || {}, exports;
       indent = '      ';
     }
 
-    for (var i = 0; i < definition.fields.length; i++) {
-      var field = definition.fields[i];
-      var code = decodeCodeForField(field, definitions);
+    for (let i = 0; i < definition.fields.length; i++) {
+      let field = definition.fields[i];
+      let code = decodeCodeForField(field, definitions);
 
       if (definition.kind === 'MESSAGE') {
         lines.push('    case ' + field.value + ':');
@@ -822,6 +822,7 @@ var kiwi = exports || kiwi || {}, exports;
   }
 
   function encodeCodeForField(field, definitions) {
+    let code;
     switch (field.type) {
       case 'bool': {
         code = 'bb.writeByte(value);';
@@ -2414,10 +2415,10 @@ var kiwi = exports || kiwi || {}, exports;
 
 // TypeScript Compiler
 (function() {
-  var ByteBuffer = kiwi.ByteBuffer;
+  let ByteBuffer = kiwi.ByteBuffer;
 
   function tsTypeForField(field) {
-    var type
+    let type
     switch (field.type) {
       case 'bool':
         type = 'boolean';
@@ -2433,8 +2434,8 @@ var kiwi = exports || kiwi || {}, exports;
         field.isArray = false;
         break;
       case 'map':
-        var keyType = tsTypeForField({ type: field.mapKeyType })
-        var valueType = tsTypeForField({ type: field.mapValueType })
+        let keyType = tsTypeForField({ type: field.mapKeyType })
+        let valueType = tsTypeForField({ type: field.mapValueType })
         type = '{ [key: ' + keyType + ']: ' + valueType + ' }'
         break;
       default:
@@ -2447,21 +2448,21 @@ var kiwi = exports || kiwi || {}, exports;
   function compileSchemaTypeScript(schema) {
     schema = convertSchema(schema);
 
-    var indent = '';
-    var lines = [];
+    let indent = '';
+    let lines = [];
 
     if (schema.package !== null) {
       lines.push('export namespace ' + schema.package + ' {');
       indent += '  ';
     }
 
-    for (var i = 0; i < schema.definitions.length; i++) {
-      var definition = schema.definitions[i];
+    for (let i = 0; i < schema.definitions.length; i++) {
+      let definition = schema.definitions[i];
 
       if (definition.kind === 'ENUM') {
         lines.push(indent + 'export enum ' + definition.name + ' {');
 
-        for (var j = 0; j < definition.fields.length; j++) {
+        for (let j = 0; j < definition.fields.length; j++) {
           lines.push(indent + '  ' + definition.fields[j].name + ' = ' + JSON.stringify(definition.fields[j].name) + ',');
         }
 
@@ -2470,19 +2471,19 @@ var kiwi = exports || kiwi || {}, exports;
       }
     }
 
-    for (var i = 0; i < schema.definitions.length; i++) {
-      var definition = schema.definitions[i];
+    for (let i = 0; i < schema.definitions.length; i++) {
+      let definition = schema.definitions[i];
 
       if (definition.kind === 'STRUCT' || definition.kind === 'MESSAGE') {
         lines.push(indent + 'export interface ' + definition.name + ' {');
 
-        for (var j = 0; j < definition.fields.length; j++) {
-          var field = definition.fields[j];
+        for (let j = 0; j < definition.fields.length; j++) {
+          let field = definition.fields[j];
           if (field.isDeprecated) {
             continue;
           }
 
-          var type = tsTypeForField(field)
+          let type = tsTypeForField(field)
 
           lines.push(indent + '  ' + field.name + (definition.kind === 'MESSAGE' ? '?' : '') + ': ' + type + (field.isArray ? '[]' : '') + ';');
         }
@@ -2498,8 +2499,8 @@ var kiwi = exports || kiwi || {}, exports;
 
     lines.push(indent + 'export interface Schema {');
 
-    for (var i = 0; i < schema.definitions.length; i++) {
-      var definition = schema.definitions[i];
+    for (let i = 0; i < schema.definitions.length; i++) {
+      let definition = schema.definitions[i];
 
       if (definition.kind === 'STRUCT' || definition.kind === 'MESSAGE') {
         lines.push(indent + '  encode' + definition.name + '(message: ' + definition.name + '): Uint8Array;');
